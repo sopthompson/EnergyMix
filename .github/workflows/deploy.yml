@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # refresh the subscribable calendar feed ~4×/day
 
 # Least-privilege token: read the repo, write Pages, mint the OIDC token.
 permissions:
@@ -28,6 +30,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: node scripts/generate-calendar.mjs dist/calendar.ics
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

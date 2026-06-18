@@ -21,6 +21,12 @@ export default function CalendarExport({ series }: Props) {
 
   const summary = events.map((e) => `${fmtDay(e.start)} ${fmtTime(e.start)}`).join(', ');
 
+  // Subscribable feed published on the site and refreshed by CI (~4×/day). The
+  // webcal: scheme makes calendar apps offer to subscribe and re-poll it.
+  const dir = window.location.pathname.replace(/[^/]*$/, '');
+  const feedHttps = `${window.location.origin}${dir}calendar.ics`;
+  const feedWebcal = feedHttps.replace(/^https?:/, 'webcal:');
+
   return (
     <div className="cal-export">
       <button className="cal-btn" onClick={() => downloadIcs('grid-clean-windows.ics', events)}>
@@ -33,6 +39,15 @@ export default function CalendarExport({ series }: Props) {
             {fmtDay(e.start)} → Google
           </a>
         ))}
+      </div>
+      <a className="cal-subscribe" href={feedWebcal}>
+        🔄 Subscribe (auto-updates daily)
+      </a>
+      <div className="cal-sub">
+        Or add this URL in your calendar app:{' '}
+        <a href={feedHttps} target="_blank" rel="noreferrer">
+          {feedHttps}
+        </a>
       </div>
     </div>
   );
