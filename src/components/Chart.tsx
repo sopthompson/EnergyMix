@@ -132,11 +132,9 @@ export default function Chart({
     return visible.filter((_, k) => k % step === 0);
   }, [visible]);
 
-  // y-axis ticks: gCO₂ in change mode, generation share % in mix mode.
+  // y-axis ticks: gCO₂ in change mode; none in mix mode (the stack is self-evident).
   const yTicks = useMemo(() => {
-    if (mode === 'mix') {
-      return [0, 25, 50, 75, 100].map((p) => ({ y: yPct(p), label: `${p}%` }));
-    }
+    if (mode === 'mix') return [] as { y: number; label: string }[];
     const step = niceStep(layout.gMax / 5);
     const out: { y: number; label: string }[] = [];
     for (let v = 0; v <= layout.gMax && out.length < 16; v += step) out.push({ y: yG(v), label: `${v}` });
@@ -233,15 +231,17 @@ export default function Chart({
           </text>
         </g>
       ))}
-      <text
-        x={PAD.left - 5}
-        y={PAD.top - 7}
-        textAnchor="end"
-        fontSize={7.5}
-        fill="var(--text-faint)"
-      >
-        {mode === 'mix' ? 'share' : 'gCO₂'}
-      </text>
+      {mode === 'change' && (
+        <text
+          x={PAD.left - 5}
+          y={PAD.top - 7}
+          textAnchor="end"
+          fontSize={7.5}
+          fill="var(--text-faint)"
+        >
+          gCO₂
+        </text>
+      )}
 
       {mode === 'change' && (
         <>
