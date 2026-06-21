@@ -85,12 +85,19 @@ export default function Chart({
   }, [series, baseline, monthlyAvg, horizonHours]);
 
   const { visible, x, yG, yPct, nowX, baselineY, nowY } = layout;
-  // Fractional y of the baseline within the plot, for the diverging gradient stop.
-  const baseFrac = Math.max(0, Math.min(1, (baselineY - PAD.top) / PLOT_H));
 
   // Split visible into past (<= now) and future (>= now) for styling.
   const futurePts = visible.filter((v) => v.i >= series.nowIndex);
   const pastPts = visible.filter((v) => v.i <= series.nowIndex);
+
+  // Diverging-gradient stops. Anchor full colour to the actual future extremes
+  // (not the plot edges) so the fill saturates over the data range and stays
+  // vivid even when the curve sits well inside the axis.
+  const frac = (yv: number) => Math.max(0, Math.min(1, (yv - PAD.top) / PLOT_H));
+  const futureYs = futurePts.map((p) => yG(p.s.gco2));
+  const baseFrac = frac(baselineY);
+  const topFrac = frac(futureYs.length ? Math.min(...futureYs, baselineY) : baselineY); // dirtiest
+  const botFrac = frac(futureYs.length ? Math.max(...futureYs, baselineY) : baselineY); // cleanest
 
   const linePath = (pts: { s: { gco2: number }; i: number }[]) =>
     pts.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.i).toFixed(2)},${yG(p.s.gco2).toFixed(2)}`).join(' ');
@@ -219,10 +226,12 @@ export default function Chart({
           x2={0}
           y2={PLOT_BOTTOM}
         >
-          <stop offset={0} stopColor="var(--bad)" stopOpacity={0.55} />
+          <stop offset={0} stopColor="var(--bad)" stopOpacity={0.85} />
+          <stop offset={topFrac} stopColor="var(--bad)" stopOpacity={0.85} />
           <stop offset={baseFrac} stopColor="var(--bad)" stopOpacity={0} />
           <stop offset={baseFrac} stopColor="var(--good)" stopOpacity={0} />
-          <stop offset={1} stopColor="var(--good)" stopOpacity={0.55} />
+          <stop offset={botFrac} stopColor="var(--good)" stopOpacity={0.85} />
+          <stop offset={1} stopColor="var(--good)" stopOpacity={0.85} />
         </linearGradient>
       </defs>
 
