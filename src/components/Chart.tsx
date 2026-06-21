@@ -226,12 +226,11 @@ export default function Chart({
           x2={0}
           y2={PLOT_BOTTOM}
         >
-          <stop offset={0} stopColor="var(--bad)" stopOpacity={0.85} />
-          <stop offset={topFrac} stopColor="var(--bad)" stopOpacity={0.85} />
-          <stop offset={baseFrac} stopColor="var(--bad)" stopOpacity={0} />
-          <stop offset={baseFrac} stopColor="var(--good)" stopOpacity={0} />
-          <stop offset={botFrac} stopColor="var(--good)" stopOpacity={0.85} />
-          <stop offset={1} stopColor="var(--good)" stopOpacity={0.85} />
+          <stop offset={0} stopColor="#ef4444" stopOpacity={0.85} />
+          <stop offset={topFrac} stopColor="#ef4444" stopOpacity={0.85} />
+          <stop offset={baseFrac} stopColor="#eab308" stopOpacity={0.8} />
+          <stop offset={botFrac} stopColor="#22c55e" stopOpacity={0.85} />
+          <stop offset={1} stopColor="#22c55e" stopOpacity={0.85} />
         </linearGradient>
       </defs>
 
