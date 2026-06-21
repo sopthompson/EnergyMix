@@ -85,6 +85,8 @@ export default function Chart({
   }, [series, baseline, monthlyAvg, horizonHours]);
 
   const { visible, x, yG, yPct, nowX, baselineY, nowY } = layout;
+  // Fractional y of the baseline within the plot, for the diverging gradient stop.
+  const baseFrac = Math.max(0, Math.min(1, (baselineY - PAD.top) / PLOT_H));
 
   // Split visible into past (<= now) and future (>= now) for styling.
   const futurePts = visible.filter((v) => v.i >= series.nowIndex);
@@ -207,12 +209,21 @@ export default function Chart({
       }}
     >
       <defs>
-        <clipPath id="clip-below">
-          <rect x={0} y={baselineY} width={W} height={Math.max(0, H - baselineY)} />
-        </clipPath>
-        <clipPath id="clip-above">
-          <rect x={0} y={0} width={W} height={baselineY} />
-        </clipPath>
+        {/* Continuous diverging fill: deep green far below the baseline →
+            neutral at it → deep brown far above. Keyed to the baseline's y. */}
+        <linearGradient
+          id="diverge"
+          gradientUnits="userSpaceOnUse"
+          x1={0}
+          y1={PAD.top}
+          x2={0}
+          y2={PLOT_BOTTOM}
+        >
+          <stop offset={0} stopColor="var(--bad)" stopOpacity={0.55} />
+          <stop offset={baseFrac} stopColor="var(--bad)" stopOpacity={0} />
+          <stop offset={baseFrac} stopColor="var(--good)" stopOpacity={0} />
+          <stop offset={1} stopColor="var(--good)" stopOpacity={0.55} />
+        </linearGradient>
       </defs>
 
       {/* y-axis: gridlines + labels (gCO₂ in change mode, share % in mix mode) */}
@@ -245,8 +256,7 @@ export default function Chart({
 
       {mode === 'change' && (
         <>
-          <path d={divergePath} fill="var(--good)" opacity={0.32} clipPath="url(#clip-below)" />
-          <path d={divergePath} fill="var(--bad)" opacity={0.32} clipPath="url(#clip-above)" />
+          <path d={divergePath} fill="url(#diverge)" />
           {/* horizontal baseline emanating from the now dot */}
           <line
             x1={nowX}
