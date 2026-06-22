@@ -6,15 +6,20 @@ interface Props {
   series: Series;
 }
 
-function fmtDay(ts: string | Date): string {
-  return new Date(ts).toLocaleDateString('en-GB', { weekday: 'short' });
+function fmtWhen(ts: string | Date): string {
+  return new Date(ts).toLocaleString('en-GB', {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-// The cleanest 2h window for each of the days ahead (48h horizon), exportable as
-// calendar events so the user can block the time to run heavy appliances.
+// Tomorrow's single cleanest 2h window — a stable recommendation (today shifts
+// as the day passes; tomorrow is fully forecast).
 export default function CalendarExport({ series }: Props) {
-  const events = bestWindowEvents(series, 3);
+  const events = bestWindowEvents(series);
   if (!events.length) return null;
+  const tomorrow = events[0];
 
   // Subscribable feed published on the site and refreshed by CI (~4×/day). The
   // webcal: scheme makes calendar apps offer to subscribe and re-poll it.
@@ -28,17 +33,15 @@ export default function CalendarExport({ series }: Props) {
         🔄 Subscribe to clean-energy calendar (auto-updates)
       </a>
       <div className="cal-sub">
-        The cleanest 2h window each day, refreshed automatically. Or add this URL manually:{' '}
+        Tomorrow's cleanest 2h window, refreshed automatically. Or add this URL manually:{' '}
         <a href={feedHttps} target="_blank" rel="noreferrer">
           {feedHttps}
         </a>
       </div>
       <div className="cal-links">
-        {events.map((e, k) => (
-          <a key={k} href={googleCalendarUrl(e)} target="_blank" rel="noreferrer">
-            {fmtDay(e.start)} → Google
-          </a>
-        ))}
+        <a href={googleCalendarUrl(tomorrow)} target="_blank" rel="noreferrer">
+          {fmtWhen(tomorrow.start)} → Add to Google
+        </a>
       </div>
     </div>
   );

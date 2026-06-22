@@ -11,7 +11,6 @@ import { dirname } from 'node:path';
 const CI = 'https://api.carbonintensity.org.uk';
 const BEST_WINDOW_SLOTS = 4; // 2h
 const SLOT_MS = 30 * 60 * 1000;
-const DAYS_AHEAD = 3;
 
 const FUEL_LABEL = {
   gas: 'Gas', coal: 'Coal', biomass: 'Biomass', nuclear: 'Nuclear', hydro: 'Hydro',
@@ -109,20 +108,26 @@ async function main() {
       byDay.get(k).push(s);
     }
 
-    for (const [dayKey, daySlots] of [...byDay].slice(0, DAYS_AHEAD)) {
+    // Tomorrow = the next full local day ([0] is today, partial). Pinning to it
+    // keeps the subscribed event stable instead of shifting on every refresh.
+    const days = [...byDay];
+    const tomorrow = days[1];
+    if (tomorrow) {
+      const [dayKey, daySlots] = tomorrow;
       const w = bestWindow(daySlots);
-      if (!w) continue;
-      const fuels = dominantFuels(w.slots, mixByTs).join(' + ');
-      events.push({
-        dayKey: dayKey.replace(/-/g, ''),
-        start: w.start,
-        end: w.end,
-        title: `Cleanest power · ${Math.round(w.mean)} gCO₂/kWh`,
-        description:
-          `Greenest 2h window to run heavy appliances (dishwasher, washing, EV charge). ` +
-          `Mean ${Math.round(w.mean)} gCO₂/kWh. Dominant: ${fuels}. ` +
-          `Source: NESO Carbon Intensity via Grid Clean.`,
-      });
+      if (w) {
+        const fuels = dominantFuels(w.slots, mixByTs).join(' + ');
+        events.push({
+          dayKey: dayKey.replace(/-/g, ''),
+          start: w.start,
+          end: w.end,
+          title: `Cleanest power · ${Math.round(w.mean)} gCO₂/kWh`,
+          description:
+            `Greenest 2h window tomorrow to run heavy appliances (dishwasher, washing, EV charge). ` +
+            `Mean ${Math.round(w.mean)} gCO₂/kWh. Dominant: ${fuels}. ` +
+            `Source: NESO Carbon Intensity via Grid Clean.`,
+        });
+      }
     }
     console.log(`Generated ${events.length} window event(s).`);
   } catch (err) {

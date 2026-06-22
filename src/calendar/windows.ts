@@ -4,25 +4,27 @@
 
 import type { Series } from '../model/types';
 import { FUEL_META } from '../model/fuels';
-import { deltaVsNow, dominantFuels, findDailyBestWindows } from '../engine/recommend';
+import { dominantFuels, findNextDayBestWindow } from '../engine/recommend';
 import type { CalEvent } from './ics';
 
-export function bestWindowEvents(series: Series, count = 3): CalEvent[] {
-  return findDailyBestWindows(series, undefined, 48)
-    .slice(0, count)
-    .map((w) => {
-      const pct = Math.round(deltaVsNow(series, series.slots[w.startIndex]) * 100);
-      const fuels = dominantFuels(series.slots.slice(w.startIndex, w.endIndex + 1))
-        .map((f) => FUEL_META[f].label)
-        .join(' + ');
-      return {
-        start: new Date(w.startTs),
-        end: new Date(w.endTs),
-        title: `Cleanest power · ${Math.round(w.meanGco2)} gCO₂/kWh`,
-        description:
-          `Greenest 2h window to run heavy appliances (dishwasher, washing, EV charge). ` +
-          `Mean ${Math.round(w.meanGco2)} gCO₂/kWh${pct < 0 ? `, ~${Math.abs(pct)}% lower than now` : ''}. ` +
-          `Dominant: ${fuels}. Source: NESO Carbon Intensity via Grid Clean.`,
-      };
-    });
+// A single, stable recommendation: the cleanest 2h window for the next full day
+// (tomorrow). Today's window shrinks as the day passes and the day-2 window sits
+// at the ragged edge of the forecast, so both churn — tomorrow does not.
+export function bestWindowEvents(series: Series): CalEvent[] {
+  const w = findNextDayBestWindow(series);
+  if (!w) return [];
+  const fuels = dominantFuels(series.slots.slice(w.startIndex, w.endIndex + 1))
+    .map((f) => FUEL_META[f].label)
+    .join(' + ');
+  return [
+    {
+      start: new Date(w.startTs),
+      end: new Date(w.endTs),
+      title: `Cleanest power · ${Math.round(w.meanGco2)} gCO₂/kWh`,
+      description:
+        `Greenest 2h window tomorrow to run heavy appliances (dishwasher, washing, EV charge). ` +
+        `Mean ${Math.round(w.meanGco2)} gCO₂/kWh. Dominant: ${fuels}. ` +
+        `Source: NESO Carbon Intensity via Grid Clean.`,
+    },
+  ];
 }

@@ -243,6 +243,33 @@ export function findDailyBestWindows(
   return out;
 }
 
+/**
+ * The cleanest width-D window within *tomorrow* — the next complete local
+ * calendar day. Unlike "today" (which shrinks as the day passes) or the day-2
+ * edge of the 48h forecast (which is only partially covered), tomorrow is always
+ * fully forecast, so this recommendation stays stable across refreshes.
+ */
+export function findNextDayBestWindow(
+  series: Series,
+  durationSlots = BEST_WINDOW_SLOTS,
+): WindowResult | null {
+  const fwd = forwardSlots(series, 48);
+  if (!fwd.length) return null;
+  const slotMs = (3600 * 1000) / SLOTS_PER_HOUR;
+  const dayOf = (ts: string) => new Date(ts).toLocaleDateString('en-GB');
+
+  const todayKey = dayOf(fwd[0].ts);
+  const tomorrow = fwd.find((s) => dayOf(s.ts) !== todayKey);
+  if (!tomorrow) return null;
+  const tomorrowKey = dayOf(tomorrow.ts);
+  const daySlots = fwd.filter((s) => dayOf(s.ts) === tomorrowKey);
+  if (daySlots.length < durationSlots) return null;
+
+  const earliestStart = new Date(daySlots[0].ts);
+  const deadline = new Date(Date.parse(daySlots[daySlots.length - 1].ts) + slotMs);
+  return findBestWindow(series, durationSlots, { earliestStart, deadline, horizonHours: 48 });
+}
+
 /** Top-k non-overlapping cleanest windows, greedy by integrated carbon. */
 export function findTopWindows(
   series: Series,
