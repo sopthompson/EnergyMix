@@ -84,7 +84,7 @@ export default function Chart({
     return { visible, firstAbs, n, gMax, x, yG, yPct, nowX, baselineY, nowY, baseLevel };
   }, [series, baseline, monthlyAvg, horizonHours]);
 
-  const { visible, x, yG, yPct, nowX, baselineY, nowY } = layout;
+  const { visible, x, yG, nowX, baselineY, nowY } = layout;
 
   // Split visible into past (<= now) and future (>= now) for styling.
   const futurePts = visible.filter((v) => v.i >= series.nowIndex);
@@ -114,14 +114,10 @@ export default function Chart({
     return `M${x0},${baselineY.toFixed(2)} ${top.slice(1)} L${xN},${baselineY.toFixed(2)} Z`;
   }, [futurePts, x, yG, baselineY]);
 
-  // Stacked-area polygons for mix mode. When total demand (MW) is known the stack
-  // is scaled to it so its top follows the varying demand curve; otherwise it
-  // falls back to a normalised 100% fill.
-  const stacks = useMemo(() => {
-    if (mode !== 'mix') return [];
-
-    // Per-slot total demand, carry-filled across any gaps (the day-ahead forecast
-    // doesn't reach the full 48h, and the past tail uses settled generation).
+  // Per-slot total demand (MW), carry-filled across gaps (the day-ahead forecast
+  // doesn't reach the full 48h; the past tail uses settled generation). Falls
+  // back to a normalised 100% scale when no demand is available.
+  const mixScale = useMemo(() => {
     const raw = visible.map((v) => v.s.demandMw);
     const hasDemand = raw.some((d) => d != null);
     let totals: number[];
@@ -132,11 +128,17 @@ export default function Chart({
       let next: number | undefined;
       for (let i = totals.length - 1; i >= 0; i--) totals[i] = totals[i] != null ? (next = totals[i]) : (next as number);
     } else {
-      totals = visible.map(() => 100); // normalised fallback
+      totals = visible.map(() => 100);
     }
     const maxScale = Math.max(1, ...totals);
     const yMix = (val: number) => PLOT_BOTTOM - (val / maxScale) * PLOT_H;
+    return { totals, maxScale, hasDemand, yMix };
+  }, [visible]);
 
+  // Stacked-area polygons for mix mode, scaled so the top follows demand.
+  const stacks = useMemo(() => {
+    if (mode !== 'mix') return [];
+    const { totals, yMix } = mixScale;
     return STACK_ORDER.map((fuel) => {
       let pathTop = '';
       let pathBottom = '';
@@ -154,7 +156,7 @@ export default function Chart({
       });
       return { fuel, d: pathTop + pathBottom + 'Z', color: FUEL_META[fuel].color };
     });
-  }, [mode, visible, x]);
+  }, [mode, visible, x, mixScale]);
 
   // x-axis time ticks roughly every 6h.
   const ticks = useMemo(() => {
@@ -162,14 +164,22 @@ export default function Chart({
     return visible.filter((_, k) => k % step === 0);
   }, [visible]);
 
-  // y-axis ticks: gCO₂ in change mode; none in mix mode (the stack is self-evident).
+  // y-axis ticks: gCO₂ in change mode; demand in GW in mix mode.
   const yTicks = useMemo(() => {
-    if (mode === 'mix') return [] as { y: number; label: string }[];
+    if (mode === 'mix') {
+      if (!mixScale.hasDemand) return [] as { y: number; label: string }[];
+      const step = niceStep(mixScale.maxScale / 4);
+      const out: { y: number; label: string }[] = [];
+      for (let v = 0; v <= mixScale.maxScale && out.length < 8; v += step) {
+        out.push({ y: mixScale.yMix(v), label: `${Math.round(v / 1000)}` });
+      }
+      return out;
+    }
     const step = niceStep(layout.gMax / 5);
     const out: { y: number; label: string }[] = [];
     for (let v = 0; v <= layout.gMax && out.length < 16; v += step) out.push({ y: yG(v), label: `${v}` });
     return out;
-  }, [mode, layout.gMax, yG, yPct]);
+  }, [mode, layout.gMax, yG, mixScale]);
 
   // Octopus Agile price overlay on a right-hand axis (p/kWh). Allows negatives
   // (plunge pricing). The line stops where rates end (~24h ahead).
@@ -274,6 +284,11 @@ export default function Chart({
       {mode === 'change' && (
         <text x={2} y={PAD.top - 7} textAnchor="start" fontSize={8.5} fill="var(--text-dim)">
           gCO₂/kWh
+        </text>
+      )}
+      {mode === 'mix' && mixScale.hasDemand && (
+        <text x={2} y={PAD.top - 7} textAnchor="start" fontSize={8.5} fill="var(--text-dim)">
+          GW demand
         </text>
       )}
 
