@@ -14,12 +14,10 @@ function fmtWhen(ts: string | Date): string {
   });
 }
 
-// Tomorrow's single cleanest 2h window — a stable recommendation (today shifts
-// as the day passes; tomorrow is fully forecast).
+// Today's and tomorrow's cleanest 2h windows.
 export default function CalendarExport({ series }: Props) {
   const events = bestWindowEvents(series);
   if (!events.length) return null;
-  const tomorrow = events[0];
 
   // Subscribable feed published on the site and refreshed by CI (~4×/day). The
   // webcal: scheme makes calendar apps offer to subscribe and re-poll it.
@@ -33,15 +31,17 @@ export default function CalendarExport({ series }: Props) {
         🔄 Subscribe to clean-energy calendar (auto-updates)
       </a>
       <div className="cal-sub">
-        Tomorrow's cleanest 2h window, refreshed automatically. Or add this URL manually:{' '}
+        Today's & tomorrow's cleanest 2h windows, refreshed automatically. Or add this URL manually:{' '}
         <a href={feedHttps} target="_blank" rel="noreferrer">
           {feedHttps}
         </a>
       </div>
       <div className="cal-links">
-        <a href={googleCalendarUrl(tomorrow)} target="_blank" rel="noreferrer">
-          {fmtWhen(tomorrow.start)} → Add to Google
-        </a>
+        {events.map((e, k) => (
+          <a key={k} href={googleCalendarUrl(e)} target="_blank" rel="noreferrer">
+            {fmtWhen(e.start)} → Google
+          </a>
+        ))}
       </div>
     </div>
   );

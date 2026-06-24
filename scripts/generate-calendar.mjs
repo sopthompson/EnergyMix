@@ -89,9 +89,13 @@ async function main() {
   let events = [];
   try {
     const now = new Date();
+    // Range covers today's earlier (settled) part + tomorrow, so today's window
+    // is computed over the whole day (stable) and is kept in the feed.
+    const from = new Date(now.getTime() - 26 * 3600e3);
+    const to = new Date(now.getTime() + 50 * 3600e3);
     const [natl, regional] = await Promise.all([
-      getJson(`${CI}/intensity/${toApiTime(now)}/fw48h`),
-      getJson(`${CI}/regional/intensity/${toApiTime(now)}/fw48h/regionid/18`),
+      getJson(`${CI}/intensity/${toApiTime(from)}/${toApiTime(to)}`),
+      getJson(`${CI}/regional/intensity/${toApiTime(from)}/${toApiTime(to)}/regionid/18`),
     ]);
     const slots = natl.data
       .map((p) => ({ from: p.from, gco2: p.intensity.actual ?? p.intensity.forecast }))
@@ -101,33 +105,27 @@ async function main() {
       mixByTs.set(p.from.slice(0, 16), Object.fromEntries(p.generationmix.map((g) => [g.fuel, g.perc])));
     }
 
-    const byDay = new Map();
-    for (const s of slots) {
-      const k = londonDay(s.from);
-      if (!byDay.has(k)) byDay.set(k, []);
-      byDay.get(k).push(s);
-    }
+    const todayKey = londonDay(now.toISOString());
+    const tomorrowKey = londonDay(new Date(now.getTime() + 24 * 3600e3).toISOString());
 
-    // Tomorrow = the next full local day ([0] is today, partial). Pinning to it
-    // keeps the subscribed event stable instead of shifting on every refresh.
-    const days = [...byDay];
-    const tomorrow = days[1];
-    if (tomorrow) {
-      const [dayKey, daySlots] = tomorrow;
+    // Today (whole day, incl. settled actuals → stable) + tomorrow. Keeping
+    // today means the event isn't deleted from a subscribed feed when the day
+    // rolls over.
+    for (const key of [todayKey, tomorrowKey]) {
+      const daySlots = slots.filter((s) => londonDay(s.from) === key);
       const w = bestWindow(daySlots);
-      if (w) {
-        const fuels = dominantFuels(w.slots, mixByTs).join(' + ');
-        events.push({
-          dayKey: dayKey.replace(/-/g, ''),
-          start: w.start,
-          end: w.end,
-          title: `Cleanest power · ${Math.round(w.mean)} gCO₂/kWh`,
-          description:
-            `Greenest 2h window tomorrow to run heavy appliances (dishwasher, washing, EV charge). ` +
-            `Mean ${Math.round(w.mean)} gCO₂/kWh. Dominant: ${fuels}. ` +
-            `Source: NESO Carbon Intensity via Grid Clean.`,
-        });
-      }
+      if (!w) continue;
+      const fuels = dominantFuels(w.slots, mixByTs).join(' + ');
+      events.push({
+        dayKey: key.replace(/-/g, ''),
+        start: w.start,
+        end: w.end,
+        title: `Cleanest power · ${Math.round(w.mean)} gCO₂/kWh`,
+        description:
+          `Greenest 2h window to run heavy appliances (dishwasher, washing, EV charge). ` +
+          `Mean ${Math.round(w.mean)} gCO₂/kWh. Dominant: ${fuels}. ` +
+          `Source: NESO Carbon Intensity via Grid Clean.`,
+      });
     }
     console.log(`Generated ${events.length} window event(s).`);
   } catch (err) {

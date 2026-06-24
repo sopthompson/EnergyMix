@@ -6,7 +6,6 @@ import {
   dominantFuels,
   findBestWindow,
   findDailyBestWindows,
-  findNextDayBestWindow,
   findTopWindows,
   nowSlot,
   percentileToday,
@@ -143,21 +142,6 @@ describe('findDailyBestWindows', () => {
     expect(dipWindow).toBeTruthy();
     expect(dipWindow!.startIndex).toBeGreaterThanOrEqual(80);
     expect(dipWindow!.startIndex).toBeLessThanOrEqual(82);
-  });
-});
-
-describe('findNextDayBestWindow', () => {
-  it("returns tomorrow's cleanest window, ignoring today", () => {
-    const g = new Array(60).fill(200);
-    g[5] = 10; // a very clean slot today — must be ignored
-    for (let i = 40; i <= 44; i++) g[i] = 30; // tomorrow's dip
-    const s = makeSeries(g, 0);
-    const w = findNextDayBestWindow(s)!;
-    expect(w).toBeTruthy();
-    const dayOf = (ts: string) => new Date(ts).toLocaleDateString('en-GB');
-    expect(dayOf(s.slots[w.startIndex].ts)).not.toBe(dayOf(s.slots[0].ts)); // not today
-    expect(w.startIndex).toBeGreaterThan(24); // second day
-    expect(w.meanGco2).toBeLessThan(100); // found the dip, not the 200 baseline
   });
 });
 
