@@ -272,14 +272,8 @@ export default function Chart({
         </g>
       ))}
       {mode === 'change' && (
-        <text
-          x={PAD.left - 5}
-          y={PAD.top - 7}
-          textAnchor="end"
-          fontSize={7.5}
-          fill="var(--text-faint)"
-        >
-          gCO₂
+        <text x={2} y={PAD.top - 7} textAnchor="start" fontSize={8.5} fill="var(--text-dim)">
+          gCO₂/kWh
         </text>
       )}
 
