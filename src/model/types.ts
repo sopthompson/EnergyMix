@@ -40,7 +40,7 @@ export interface Slot {
   index: CarbonIndex;
   mix: FuelMix; // share in %
   mw?: Partial<FuelMix>; // absolute MW, only if Elexon joined
-  demandMw?: number; // total national demand (MW) — past actual / forward forecast
+  genMw?: number; // total generation (MW), calibrated to constant nuclear baseload
   price?: number; // p/kWh, only if Octopus joined
 }
 

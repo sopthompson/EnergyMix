@@ -118,7 +118,7 @@ export default function Chart({
   // doesn't reach the full 48h; the past tail uses settled generation). Falls
   // back to a normalised 100% scale when no demand is available.
   const mixScale = useMemo(() => {
-    const raw = visible.map((v) => v.s.demandMw);
+    const raw = visible.map((v) => v.s.genMw);
     const hasDemand = raw.some((d) => d != null);
     let totals: number[];
     if (hasDemand) {
@@ -288,7 +288,7 @@ export default function Chart({
       )}
       {mode === 'mix' && mixScale.hasDemand && (
         <text x={2} y={PAD.top - 7} textAnchor="start" fontSize={8.5} fill="var(--text-dim)">
-          GW demand
+          GW gen
         </text>
       )}
 

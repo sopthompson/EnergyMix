@@ -100,7 +100,7 @@ export default function App() {
               : " Regional view: 12h history + forecast are NESO's regional estimate (no settled actuals)."}
             {mode === 'mix' &&
               region.regionId === NATIONAL.regionId &&
-              ' Energy mix scaled to national demand (Elexon actuals + day-ahead forecast).'}
+              ' Energy mix scaled to total generation (calibrated to constant nuclear output).'}
             {baseline === 'average' &&
               (monthlyAvg
                 ? ` "Average" = ${region.label} 30-day, demand-weighted by GB load, ${Math.round(monthlyAvg.gco2)} gCO₂/kWh.`

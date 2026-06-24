@@ -37,32 +37,27 @@ function tsKey(iso: string): string {
   return iso.slice(0, 16); // minute precision, matches the carbon API's `from`
 }
 
-interface DemandRow {
-  boundary: string;
-  startTime: string;
-  publishTime: string;
-  nationalDemand: number;
+/**
+ * Most recent settled nuclear output (MW). Nuclear is near-constant baseload, so
+ * this single figure calibrates total generation: since the carbon API reports
+ * nuclear's % share of total generation, total = nuclearMW ÷ (nuclear% / 100).
+ */
+export async function getRecentNuclearMW(): Promise<number | null> {
+  const now = new Date();
+  const from = new Date(now.getTime() - 6 * 3600 * 1000);
+  const url = `${BASE}/datasets/FUELHH?settlementDateFrom=${dateOnly(from)}&settlementDateTo=${dateOnly(now)}&format=json`;
+  const json = await getJson<{ data: FuelHhRow[] }>(url, 30 * 60 * 1000);
+  let latest: { ts: string; mw: number } | null = null;
+  for (const r of json.data ?? []) {
+    if (r.fuelType !== 'NUCLEAR') continue;
+    if (!latest || r.startTime > latest.ts) latest = { ts: r.startTime, mw: r.generation };
+  }
+  return latest ? latest.mw : null;
 }
 
 /**
- * National demand forecast (MW) per half-hour over [from, to], keyed by
- * minute-precision timestamp. Boundary "N" is the national figure; where a slot
- * has been re-forecast, the latest publish wins. Covers ~day-ahead.
- */
-export async function getDemandForecast(from: Date, to: Date): Promise<Map<string, number>> {
-  const url = `${BASE}/forecast/demand/day-ahead?settlementDateFrom=${dateOnly(from)}&settlementDateTo=${dateOnly(to)}&format=json`;
-  const json = await getJson<{ data: DemandRow[] }>(url, 30 * 60 * 1000);
-  const latest = new Map<string, { pub: string; mw: number }>();
-  for (const r of json.data ?? []) {
-    if (r.boundary !== 'N') continue;
-    const k = tsKey(r.startTime);
-    const prev = latest.get(k);
-    if (!prev || r.publishTime > prev.pub) latest.set(k, { pub: r.publishTime, mw: r.nationalDemand });
-  }
-  const out = new Map<string, number>();
-  for (const [k, v] of latest) out.set(k, v.mw);
-  return out;
-}
+ * Total generation (MW) per half-hour over [from, to], keyed by minute-precision
+ * timestamp. Fetched in weekly chunks to keep responses manageable.
 
 /**
  * Total generation (MW) per half-hour over [from, to], keyed by minute-precision
