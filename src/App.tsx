@@ -99,6 +99,7 @@ export default function App() {
               ? ' Forward mix from the GB regional forecast; hydro & other (which it omits) estimated from the same time last week.'
               : " Regional view: 12h history + forecast are NESO's regional estimate (no settled actuals)."}
             {mode === 'mix' &&
+              region.regionId === NATIONAL.regionId &&
               ' Energy mix scaled to national demand (Elexon actuals + day-ahead forecast).'}
             {baseline === 'average' &&
               (monthlyAvg

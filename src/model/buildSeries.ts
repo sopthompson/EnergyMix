@@ -206,15 +206,13 @@ export async function buildRegionalSeries(
   const slotNow = floorToSlot(now);
   const tailFrom = floorToSlot(new Date(now.getTime() - TAIL_HOURS * 3600 * 1000));
 
-  const horizonEnd = new Date(slotNow.getTime() + 48 * 3600 * 1000);
-
   // Regional has no settled actuals, so both the tail and forward are NESO's
-  // regional estimate. The tail still gives the dashed history context. Demand
-  // (to scale the mix stack) is national — its timing is broadly common.
-  const [tail, forward, demand] = await Promise.all([
+  // regional estimate. The tail still gives the dashed history context. Demand is
+  // national-only, so it isn't applied here — the regional mix stays a normalised
+  // 100% stack rather than being scaled to a mismatched demand curve.
+  const [tail, forward] = await Promise.all([
     getRegionalRange(tailFrom, slotNow, region.regionId).catch(() => [] as RegionalForecastPoint[]),
     getRegionalForward(slotNow, region.regionId),
-    loadDemand(tailFrom, slotNow, horizonEnd),
   ]);
 
   const byTs = new Map<string, RegionalForecastPoint>();
@@ -235,7 +233,6 @@ export async function buildRegionalSeries(
       mix: fullMix(p.mix),
     }),
   );
-  attachDemand(slots, demand);
   return {
     slots,
     nowIndex: findNowIndex(slots, now),
