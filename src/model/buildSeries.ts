@@ -16,6 +16,7 @@ import {
   toApiTime,
 } from '../api/carbon';
 import type { IntensityPoint, MixPoint, RegionalForecastPoint } from '../api/carbon';
+import { getDemandForecast, getTotalGenerationMW } from '../api/elexon';
 import {
   FUELS,
   NATIONAL,
@@ -43,6 +44,30 @@ function fullMix(partial: Partial<FuelMix> | undefined): FuelMix {
 
 function emptyMix(): FuelMix {
   return fullMix(undefined);
+}
+
+// Total national demand (MW) per half-hour over the visible window: settled
+// generation (Elexon FUELHH) for the past tail + the day-ahead demand forecast
+// for the future. Used to scale the energy-mix stack to the varying demand.
+async function loadDemand(
+  tailFrom: Date,
+  slotNow: Date,
+  horizonEnd: Date,
+): Promise<Map<string, number>> {
+  const [past, future] = await Promise.all([
+    getTotalGenerationMW(tailFrom, slotNow).catch(() => new Map<string, number>()),
+    getDemandForecast(slotNow, horizonEnd).catch(() => new Map<string, number>()),
+  ]);
+  const m = new Map(past);
+  for (const [k, v] of future) m.set(k, v);
+  return m;
+}
+
+function attachDemand(slots: Slot[], demand: Map<string, number>): void {
+  for (const s of slots) {
+    const d = demand.get(s.ts.slice(0, 16));
+    if (d != null) s.demandMw = d;
+  }
 }
 
 type Baseload = { hydro: number; other: number };
@@ -134,14 +159,17 @@ export async function buildNationalSeries(now = new Date()): Promise<Series> {
   const weekFrom = new Date(slotNow.getTime() - WEEK_MS);
   const weekTo = new Date(weekFrom.getTime() + 50 * 3600 * 1000); // covers the 48h horizon
 
+  const horizonEnd = new Date(slotNow.getTime() + 48 * 3600 * 1000);
+
   // `fw48h` is anchored at its start time, so the past tail is fetched as an
   // explicit range and the forward 48h forecast separately, then concatenated.
-  const [tail, forward, pastMix, forwardMix, weekAgoMix] = await Promise.all([
+  const [tail, forward, pastMix, forwardMix, weekAgoMix, demand] = await Promise.all([
     getIntensityRange(tailFrom, slotNow),
     getNationalForward(slotNow),
     getGenerationRange(tailFrom, slotNow).catch(() => [] as MixPoint[]),
     getRegionalForward(slotNow, NATIONAL.regionId).catch(() => [] as RegionalForecastPoint[]),
     getGenerationRange(weekFrom, weekTo).catch(() => [] as MixPoint[]),
+    loadDemand(tailFrom, slotNow, horizonEnd),
   ]);
 
   const weekAgo = new Map<string, Baseload>();
@@ -160,6 +188,7 @@ export async function buildNationalSeries(now = new Date()): Promise<Series> {
   const slots = assemble(intensity, mixByTs);
   const nowIndex = findNowIndex(slots, now);
   fillForecastBaseload(slots, nowIndex, weekAgo);
+  attachDemand(slots, demand);
   return {
     slots,
     nowIndex,
@@ -177,11 +206,15 @@ export async function buildRegionalSeries(
   const slotNow = floorToSlot(now);
   const tailFrom = floorToSlot(new Date(now.getTime() - TAIL_HOURS * 3600 * 1000));
 
+  const horizonEnd = new Date(slotNow.getTime() + 48 * 3600 * 1000);
+
   // Regional has no settled actuals, so both the tail and forward are NESO's
-  // regional estimate. The tail still gives the dashed history context.
-  const [tail, forward] = await Promise.all([
+  // regional estimate. The tail still gives the dashed history context. Demand
+  // (to scale the mix stack) is national — its timing is broadly common.
+  const [tail, forward, demand] = await Promise.all([
     getRegionalRange(tailFrom, slotNow, region.regionId).catch(() => [] as RegionalForecastPoint[]),
     getRegionalForward(slotNow, region.regionId),
+    loadDemand(tailFrom, slotNow, horizonEnd),
   ]);
 
   const byTs = new Map<string, RegionalForecastPoint>();
@@ -202,6 +235,7 @@ export async function buildRegionalSeries(
       mix: fullMix(p.mix),
     }),
   );
+  attachDemand(slots, demand);
   return {
     slots,
     nowIndex: findNowIndex(slots, now),

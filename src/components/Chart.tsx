@@ -114,26 +114,47 @@ export default function Chart({
     return `M${x0},${baselineY.toFixed(2)} ${top.slice(1)} L${xN},${baselineY.toFixed(2)} Z`;
   }, [futurePts, x, yG, baselineY]);
 
-  // Stacked-area polygons for mix mode.
+  // Stacked-area polygons for mix mode. When total demand (MW) is known the stack
+  // is scaled to it so its top follows the varying demand curve; otherwise it
+  // falls back to a normalised 100% fill.
   const stacks = useMemo(() => {
     if (mode !== 'mix') return [];
+
+    // Per-slot total demand, carry-filled across any gaps (the day-ahead forecast
+    // doesn't reach the full 48h, and the past tail uses settled generation).
+    const raw = visible.map((v) => v.s.demandMw);
+    const hasDemand = raw.some((d) => d != null);
+    let totals: number[];
+    if (hasDemand) {
+      totals = raw.slice() as number[];
+      let last: number | undefined;
+      for (let i = 0; i < totals.length; i++) totals[i] = totals[i] != null ? (last = totals[i]) : (last as number);
+      let next: number | undefined;
+      for (let i = totals.length - 1; i >= 0; i--) totals[i] = totals[i] != null ? (next = totals[i]) : (next as number);
+    } else {
+      totals = visible.map(() => 100); // normalised fallback
+    }
+    const maxScale = Math.max(1, ...totals);
+    const yMix = (val: number) => PLOT_BOTTOM - (val / maxScale) * PLOT_H;
+
     return STACK_ORDER.map((fuel) => {
       let pathTop = '';
       let pathBottom = '';
       visible.forEach((p, k) => {
+        const total = totals[k];
         let below = 0;
         for (const f of STACK_ORDER) {
           if (f === fuel) break;
-          below += p.s.mix[f];
+          below += (p.s.mix[f] / 100) * total;
         }
-        const top = below + p.s.mix[fuel];
+        const top = below + (p.s.mix[fuel] / 100) * total;
         const px = x(p.i).toFixed(2);
-        pathTop += `${k === 0 ? 'M' : 'L'}${px},${yPct(top).toFixed(2)} `;
-        pathBottom = `L${px},${yPct(below).toFixed(2)} ` + pathBottom;
+        pathTop += `${k === 0 ? 'M' : 'L'}${px},${yMix(top).toFixed(2)} `;
+        pathBottom = `L${px},${yMix(below).toFixed(2)} ` + pathBottom;
       });
       return { fuel, d: pathTop + pathBottom + 'Z', color: FUEL_META[fuel].color };
     });
-  }, [mode, visible, x, yPct]);
+  }, [mode, visible, x]);
 
   // x-axis time ticks roughly every 6h.
   const ticks = useMemo(() => {
